@@ -9,9 +9,6 @@ if(NOT WEBKIT_VERSION)
   set(WEBKIT_VERSION autobuild-preview-pr-161-0596ebdb)
 endif()
 
-# Use preview build URL for PR branches until merged to main
-set(WEBKIT_PREVIEW_PR 161)
-
 string(SUBSTRING ${WEBKIT_VERSION} 0 16 WEBKIT_VERSION_PREFIX)
 string(SUBSTRING ${WEBKIT_VERSION} 0 8 WEBKIT_VERSION_SHORT)
 
