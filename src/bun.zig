@@ -237,6 +237,9 @@ pub const validators = @import("./bun.js/node/util/validators.zig");
 pub const shell = @import("./shell/shell.zig");
 pub const md = @import("./md/root.zig");
 
+/// JS Runtime Tracing - 通过环境变量 BUN_TRACE=1 启用
+pub const trace_logger = @import("./trace_logger.zig");
+
 pub const Output = @import("./output.zig");
 pub const Global = @import("./Global.zig");
 

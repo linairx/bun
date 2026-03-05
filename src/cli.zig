@@ -688,6 +688,13 @@ pub const Command = struct {
     /// So do not add any path buffers or anything that is large in this
     /// function or that stack space is used up forever.
     pub fn start(allocator: std.mem.Allocator, log: *logger.Log) !void {
+        // === 初始化追踪系统 ===
+        bun.trace_logger.init(allocator) catch |err| {
+            bun.Output.print("[Trace] Failed to initialize: {s}\n", .{@errorName(err)});
+        };
+        defer bun.trace_logger.deinit();
+        // === 追踪初始化结束 ===
+
         if (comptime Environment.allow_assert) {
             if (!bun.env_var.MI_VERBOSE.get()) {
                 bun.mimalloc.mi_option_set_enabled(.verbose, false);

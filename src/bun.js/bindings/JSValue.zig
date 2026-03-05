@@ -248,6 +248,20 @@ pub const JSValue = enum(i64) {
 
     pub fn call(function: JSValue, global: *JSGlobalObject, thisValue: jsc.JSValue, args: []const jsc.JSValue) bun.JSError!jsc.JSValue {
         jsc.markBinding(@src());
+
+        // === 追踪代码 - 开始 ===
+        const trace_enabled = bun.trace_logger.isEnabled();
+        var func_name_for_trace: ?bun.String = null;
+
+        if (trace_enabled) {
+            // 获取函数名用于追踪
+            func_name_for_trace = function.getName(global) catch null;
+            if (func_name_for_trace) |name| {
+                bun.trace_logger.logJsCall(name.slice(), args.len, 0, 0);
+            }
+        }
+        // === 追踪代码 - 结束 ===
+
         if (comptime bun.Environment.isDebug) {
             const loop = jsc.VirtualMachine.get().eventLoop();
             loop.debug.js_call_count_outside_tick_queue += @as(usize, @intFromBool(!loop.debug.is_inside_tick_queue));
@@ -260,13 +274,24 @@ pub const JSValue = enum(i64) {
             // this can be an async context so it's fine if it's not callable.
         }
 
-        return fromJSHostCall(global, @src(), Bun__JSValue__call, .{
+        const result = fromJSHostCall(global, @src(), Bun__JSValue__call, .{
             global,
             function,
             thisValue,
             args.len,
             args.ptr,
         });
+
+        // === 追踪代码 - 返回 ===
+        if (trace_enabled) {
+            if (func_name_for_trace) |name| {
+                bun.trace_logger.logJsReturn(name.slice(), 0);
+                name.deref();
+            }
+        }
+        // === 追踪代码 - 结束 ===
+
+        return result;
     }
 
     extern fn Bun__Process__queueNextTick1(*JSGlobalObject, func: JSValue, JSValue) void;
