@@ -257,7 +257,7 @@ pub const JSValue = enum(i64) {
             // 获取函数名用于追踪
             func_name_for_trace = function.getName(global) catch null;
             if (func_name_for_trace) |name| {
-                bun.trace_logger.logJsCall(name.slice(), args.len, 0, 0);
+                bun.trace_logger.logJsCall(name.byteSlice(), args.len, 0, 0);
             }
         }
         // === 追踪代码 - 结束 ===

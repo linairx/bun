@@ -69,7 +69,7 @@ const TraceState = struct {
     fn init(allocator: std.mem.Allocator, config: TraceConfig) !TraceState {
         var state = TraceState{
             .config = config,
-            .events = std.ArrayList(TraceEvent).init(allocator),
+            .events = std.ArrayList(TraceEvent).initCapacity(allocator, 1024) catch .empty,
             .allocator = allocator,
         };
 
@@ -192,7 +192,7 @@ pub fn getLevel() TraceLevel {
 /// 记录 JS 函数调用
 pub fn logJsCall(
     func_name: []const u8,
-    args_count: usize,
+    _: usize, // args_count - 保留供未来使用
     line: u32,
     column: u32,
 ) void {
