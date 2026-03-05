@@ -285,7 +285,7 @@ pub const JSValue = enum(i64) {
         // === 追踪代码 - 返回 ===
         if (trace_enabled) {
             if (func_name_for_trace) |name| {
-                bun.trace_logger.logJsReturn(name.slice(), 0);
+                bun.trace_logger.logJsReturn(name.byteSlice(), 0);
                 name.deref();
             }
         }

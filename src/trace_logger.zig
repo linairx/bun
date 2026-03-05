@@ -69,7 +69,7 @@ const TraceState = struct {
     fn init(allocator: std.mem.Allocator, config: TraceConfig) !TraceState {
         var state = TraceState{
             .config = config,
-            .events = std.ArrayList(TraceEvent).initCapacity(allocator, 1024) catch .empty,
+            .events = .empty,
             .allocator = allocator,
         };
 
@@ -86,7 +86,7 @@ const TraceState = struct {
 
     fn deinit(self: *TraceState) void {
         self.flush();
-        self.events.deinit();
+        self.events.deinit(self.allocator);
         if (self.output_file) |f| {
             f.close();
         }
@@ -96,7 +96,7 @@ const TraceState = struct {
         self.lock.lock();
         defer self.lock.unlock();
 
-        self.events.append(event) catch |err| {
+        self.events.append(self.allocator, event) catch |err| {
             bun.Output.print("[Trace] Failed to log event: {s}\n", .{@errorName(err)});
         };
 
@@ -111,7 +111,7 @@ const TraceState = struct {
         if (self.output_file == null) return;
 
         const file = self.output_file.?;
-        const writer = file.writer();
+        const writer = file.writer(self.allocator);
 
         for (self.events.items) |event| {
             // JSON Lines 格式
