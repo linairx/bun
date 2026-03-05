@@ -111,11 +111,13 @@ const TraceState = struct {
         if (self.output_file == null) return;
 
         const file = self.output_file.?;
-        const writer = file.writer(self.allocator);
+
+        // 使用固定大小的 buffer 来构建每行 JSON
+        var line_buf: [4096]u8 = undefined;
 
         for (self.events.items) |event| {
             // JSON Lines 格式
-            writer.print(
+            const line = std.fmt.bufPrint(&line_buf,
                 \\{{"type":"{s}","ts":{},"mono":{},"name":"{s}","line":{},"column":{}}}
                 \\
             , .{
@@ -125,7 +127,9 @@ const TraceState = struct {
                 event.name,
                 event.line,
                 event.column,
-            }) catch {};
+            }) catch continue;
+
+            file.writeAll(line) catch {};
         }
 
         self.events.clearRetainingCapacity();
