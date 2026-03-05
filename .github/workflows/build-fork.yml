@@ -1,0 +1,239 @@
+# Fork 用户自编译 Workflow
+# 在你自己的 fork 上运行此 workflow 来编译 Bun
+#
+# 使用方法:
+# 1. Fork 这个仓库到你的 GitHub 账号
+# 2. 进入 Actions 标签页
+# 3. 选择 "Build Bun (Fork)" workflow
+# 4. 点击 "Run workflow" 选择你的分支和目标平台
+# 5. 等待编译完成（约 60-120 分钟）
+# 6. 在 Artifacts 中下载编译好的二进制文件
+#
+# 注意:
+# - GitHub Actions 免费额度: 2000 分钟/月 (公开仓库无限制)
+# - Linux 编译约需 60-90 分钟
+# - macOS 编译约需 90-120 分钟
+
+name: Build Bun (Fork)
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Build type'
+        required: true
+        default: 'release'
+        type: choice
+        options:
+          - release
+          - debug
+
+# 取消之前的构建
+concurrency:
+  group: build-fork-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  LLVM_VERSION: "21"
+  LLVM_VERSION_FULL: "21.1.8"
+  BUN_VERSION: "1.3.2"
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    # GitHub Actions 免费额度: 2000 分钟/月（私有仓库）
+    # 公开仓库无时间限制
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Free disk space
+        run: |
+          # 清理不必要的文件以释放磁盘空间
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo docker image prune --all --force
+          df -h
+
+      - name: Setup build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/ccache
+            build/cache
+          key: build-linux-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake', 'cmake/**/*') }}
+          restore-keys: |
+            build-linux-
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake ninja-build pkg-config \
+            libssl-dev zlib1g-dev \
+            ccache \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            curl wget unzip
+
+      - name: Setup LLVM ${{ env.LLVM_VERSION }}
+        run: |
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh ${{ env.LLVM_VERSION }} all
+          rm llvm.sh
+
+          # 设置符号链接
+          for f in /usr/lib/llvm-${{ env.LLVM_VERSION }}/bin/*; do
+            sudo ln -sf "$f" /usr/bin
+          done
+          sudo ln -sf /usr/bin/clang-${{ env.LLVM_VERSION }} /usr/bin/clang
+          sudo ln -sf /usr/bin/clang++-${{ env.LLVM_VERSION }} /usr/bin/clang++
+
+          # 验证
+          clang --version
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Configure CMake
+        run: |
+          mkdir -p build
+          cmake \
+            -B build \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=${{ inputs.build_type == 'debug' && 'Debug' || 'Release' }} \
+            -DCMAKE_C_COMPILER=clang-${{ env.LLVM_VERSION }} \
+            -DCMAKE_CXX_COMPILER=clang++-${{ env.LLVM_VERSION }} \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+
+      - name: Build
+        run: |
+          cmake --build build --config ${{ inputs.build_type == 'debug' && 'Debug' || 'Release' }} -j $(nproc)
+
+      - name: Verify build
+        run: |
+          if [ "${{ inputs.build_type }}" = "debug" ]; then
+            ls -la build/debug/bun-debug
+            ./build/debug/bun-debug --version
+          else
+            ls -la build/release/bun
+            ./build/release/bun --version
+          fi
+
+      - name: Package artifact
+        run: |
+          mkdir -p artifact
+          if [ "${{ inputs.build_type }}" = "debug" ]; then
+            cp build/debug/bun-debug artifact/bun-debug-linux-x64
+          else
+            cp build/release/bun artifact/bun-linux-x64
+          fi
+          chmod +x artifact/*
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bun-linux-${{ inputs.build_type }}-${{ github.sha }}
+          path: artifact/
+          retention-days: 7
+
+  build-macos:
+    runs-on: macos-latest
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Setup build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/ccache
+            build/cache
+          key: build-macos-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake', 'cmake/**/*') }}
+          restore-keys: |
+            build-macos-
+
+      - name: Install system dependencies
+        run: |
+          brew install cmake ninja pkg-config openssl zlib ccache
+
+      - name: Setup LLVM
+        run: |
+          brew install llvm@${{ env.LLVM_VERSION }} || brew install llvm
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Configure CMake
+        run: |
+          mkdir -p build
+
+          # 设置 macOS 特定的编译器路径
+          export PATH="$(brew --prefix llvm@${{ env.LLVM_VERSION }})/bin:$PATH" 2>/dev/null || true
+          export PATH="$(brew --prefix llvm)/bin:$PATH"
+
+          cmake \
+            -B build \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=${{ inputs.build_type == 'debug' && 'Debug' || 'Release' }} \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DOPENSSL_ROOT_DIR=$(brew --prefix openssl)
+
+      - name: Build
+        run: |
+          cmake --build build --config ${{ inputs.build_type == 'debug' && 'Debug' || 'Release' }} -j $(sysctl -n hw.ncpu)
+
+      - name: Verify build
+        run: |
+          if [ "${{ inputs.build_type }}" = "debug" ]; then
+            ls -la build/debug/bun-debug
+            ./build/debug/bun-debug --version
+          else
+            ls -la build/release/bun
+            ./build/release/bun --version
+          fi
+
+      - name: Package artifact
+        run: |
+          mkdir -p artifact
+          ARCH=$(uname -m)
+          if [ "${{ inputs.build_type }}" = "debug" ]; then
+            cp build/debug/bun-debug artifact/bun-debug-macos-${ARCH}
+          else
+            cp build/release/bun artifact/bun-macos-${ARCH}
+          fi
+          chmod +x artifact/*
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bun-macos-${{ inputs.build_type }}-${{ github.sha }}
+          path: artifact/
+          retention-days: 7
