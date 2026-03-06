@@ -41,14 +41,14 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      - name: Setup build cache
+      - name: Setup ccache
         uses: actions/cache@v4
         with:
           path: |
-            build/cache
-          key: build-linux-${{ github.sha }}
+            ~/.cache/ccache
+          key: ccache-linux-${{ github.sha }}
           restore-keys: |
-            build-linux-
+            ccache-linux-
 
       - name: Fix git ownership
         run: git config --global --add safe.directory /__w/bun/bun
@@ -58,11 +58,19 @@ jobs:
 
       - name: Build
         run: |
+          # Set cache path for ccache
+          export CACHE_PATH="$HOME/.cache/ccache"
+          export CCACHE_DIR="$HOME/.cache/ccache"
+          mkdir -p "$CCACHE_DIR"
+
           if [ "${{ inputs.build_type }}" = "debug" ]; then
             bun run build:debug
           else
             bun run build:release
           fi
+
+          # Show ccache stats
+          ccache --show-stats 2>/dev/null || true
 
       - name: Verify build
         run: |
@@ -102,15 +110,14 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      - name: Setup build cache
+      - name: Setup ccache
         uses: actions/cache@v4
         with:
           path: |
             ~/Library/Caches/ccache
-            build/cache
-          key: build-macos-${{ github.sha }}
+          key: ccache-macos-${{ github.sha }}
           restore-keys: |
-            build-macos-
+            ccache-macos-
 
       - name: Install system dependencies
         run: |
@@ -140,11 +147,19 @@ jobs:
           export PATH="$(brew --prefix llvm@18)/bin:$PATH" 2>/dev/null || true
           export PATH="$(brew --prefix llvm)/bin:$PATH"
 
+          # Set cache path for ccache
+          export CACHE_PATH="$HOME/Library/Caches/ccache"
+          export CCACHE_DIR="$HOME/Library/Caches/ccache"
+          mkdir -p "$CCACHE_DIR"
+
           if [ "${{ inputs.build_type }}" = "debug" ]; then
             bun run build:debug
           else
             bun run build:release
           fi
+
+          # Show ccache stats
+          ccache --show-stats 2>/dev/null || true
 
       - name: Verify build
         run: |
