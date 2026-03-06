@@ -129,6 +129,11 @@ jobs:
       - name: Install dependencies
         run: bun install
 
+      - name: Clear CMake cache
+        run: |
+          # Clear CMake cache to avoid NOTfound compiler errors
+          rm -rf build/release/CMakeCache.txt build/debug/CMakeCache.txt 2>/dev/null || true
+
       - name: Build
         run: |
           export PATH="$(brew --prefix llvm@19)/bin:$PATH" 2>/dev/null || true
