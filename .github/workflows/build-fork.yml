@@ -136,17 +136,35 @@ jobs:
       - name: Install dependencies
         run: bun install
 
+      - name: Setup LLVM environment
+        run: |
+          # Setup LLVM paths before any CMake configuration
+          LLVM_PATH=""
+          if [ -d "$(brew --prefix llvm@19 2>/dev/null)/bin" ]; then
+            LLVM_PATH="$(brew --prefix llvm@19)/bin"
+          elif [ -d "$(brew --prefix llvm@18 2>/dev/null)/bin" ]; then
+            LLVM_PATH="$(brew --prefix llvm@18)/bin"
+          else
+            LLVM_PATH="$(brew --prefix llvm)/bin"
+          fi
+          echo "LLVM_PATH=$LLVM_PATH" >> $GITHUB_ENV
+          echo "$LLVM_PATH" >> $GITHUB_PATH
+
+          # Verify clang is available
+          echo "Using LLVM from: $LLVM_PATH"
+          "$LLVM_PATH/clang" --version
+
       - name: Clear CMake cache
         run: |
-          # Clear CMake cache to avoid NOTfound compiler errors
-          rm -rf build/release/CMakeCache.txt build/debug/CMakeCache.txt 2>/dev/null || true
+          # Clear entire build directory to avoid cached NOTFOUND compiler paths
+          if [ "${{ inputs.build_type }}" = "debug" ]; then
+            rm -rf build/debug
+          else
+            rm -rf build/release
+          fi
 
       - name: Build
         run: |
-          export PATH="$(brew --prefix llvm@19)/bin:$PATH" 2>/dev/null || true
-          export PATH="$(brew --prefix llvm@18)/bin:$PATH" 2>/dev/null || true
-          export PATH="$(brew --prefix llvm)/bin:$PATH"
-
           # Set cache path for ccache
           export CACHE_PATH="$HOME/Library/Caches/ccache"
           export CCACHE_DIR="$HOME/Library/Caches/ccache"
