@@ -17,11 +17,11 @@ on:
       build_type:
         description: 'Build type'
         required: true
-        default: 'release'
+        default: 'debug'
         type: choice
         options:
-          - release
           - debug
+          - release
 
 concurrency:
   group: build-fork-${{ github.ref }}
@@ -44,11 +44,9 @@ jobs:
       - name: Setup ccache
         uses: actions/cache@v4
         with:
-          path: |
-            ~/.cache/ccache
-          key: ccache-linux-${{ github.sha }}
-          restore-keys: |
-            ccache-linux-
+          path: ~/.cache/ccache
+          key: ccache-linux-v1
+          restore-keys: ccache-linux-
 
       - name: Fix git ownership
         run: git config --global --add safe.directory /__w/bun/bun
@@ -95,7 +93,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: bun-linux-${{ inputs.build_type }}-${{ github.sha }}
+          name: bun-linux-${{ inputs.build_type }}
           path: artifact/
           retention-days: 7
 
@@ -113,11 +111,9 @@ jobs:
       - name: Setup ccache
         uses: actions/cache@v4
         with:
-          path: |
-            ~/Library/Caches/ccache
-          key: ccache-macos-${{ github.sha }}
-          restore-keys: |
-            ccache-macos-
+          path: ~/Library/Caches/ccache
+          key: ccache-macos-v1
+          restore-keys: ccache-macos-
 
       - name: Install system dependencies
         run: |
@@ -147,6 +143,10 @@ jobs:
           else
             LLVM_PATH="$(brew --prefix llvm)/bin"
           fi
+
+          # Set CC and CXX environment variables for CMake to find the compiler
+          echo "CC=$LLVM_PATH/clang" >> $GITHUB_ENV
+          echo "CXX=$LLVM_PATH/clang++" >> $GITHUB_ENV
           echo "LLVM_PATH=$LLVM_PATH" >> $GITHUB_ENV
           echo "$LLVM_PATH" >> $GITHUB_PATH
 
@@ -203,6 +203,6 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: bun-macos-${{ inputs.build_type }}-${{ github.sha }}
+          name: bun-macos-${{ inputs.build_type }}
           path: artifact/
           retention-days: 7
